@@ -47,6 +47,7 @@ data_api_information = f"""
   * `closure` - default to `all`. Could be one of these: {', '.join(map(str, data["Closure"].unique()))}
   * `belt_loops` - default to `all`. Could be one of these: {', '.join(map(str, data["Belt Loops"].unique()))}
   * `cuff` - default to `all`. Could be one of these: {', '.join(map(str, data["Cuff"].unique()))}
+  * `is_store_level` - default to `False`. Could be `True` or `False`. `True` when store level data is required else `False`
   * `store` - default to `all`. Could be one of these: {', '.join(map(str, data["Store"].unique()))}
   * `region` - default to `all`. Could be one of these: {', '.join(map(str, data["Region"].unique()))}
     Returns:
@@ -64,6 +65,7 @@ data_api_information = f"""
   * `neck_style` - default to `all`.Could be one of these: {', '.join(map(str, data_shirt['neck style'].unique()))}
   * `pocket_style` - default to `all`.Could be one of these: {', '.join(map(str, data_shirt['pocket style'].unique()))}
   * `tags` - default to `all`.Could be one of these: {', '.join(map(str, data_shirt['tags'].unique()))}
+  * `is_store_level` - default to `False`. Could be `True` or `False`. `True` when store level data is required else `False`
   * `store`- default to `all`.Could be one of these: {', '.join(map(str, data_shirt['Store'].unique()))}
   * `region`- default to `all`.Could be one of these: {', '.join(map(str, data_shirt['Region'].unique()))}
     Returns:
@@ -76,8 +78,8 @@ data_api_information = f"""
 
 forecasting_model_inference_prompt = """"
 
-* `forecasting_model_inference_api` - API for forecasting model inference. Arguments:
-  * `sales_dataframe` - dataframe use for training and forecasting. 
+* `forecasting_model_inference_api` - Complete API for forecasting model inference. Arguments:
+  * `sales_dataframe` - dataframe fetched from data API. It should contain date and sales columns. 
   * `start_date` - start date of forecasting, such as '2024-01-01'
   * `end_date` -  end_date of forecasting, such as '2024-03-31'
     `forecasting_model_inference_api` returns python dictionary with following key-value:
@@ -232,23 +234,26 @@ Your are an expert AI that breaks down user question into smaller step-by-step t
 
 Return step-by-step task using only tools
 
-**Example**
+
+Most recent conversation is at the bottom of that history.
+
+## **Example**
 User Question:  I want to know the sales of pant for june, july, august 2024 for each store
 
 Output: 
 [
-    "Retrieve Sales Data: Write python script to load data for `pants` from June, July, and August 2024 for every store separately",
-    "Calculate Total Sales: Calculate the total sales of pants for each store separately",
-    "Present Results: Present the calculated total sales for each store in a clear and understandable format, such as a table or a chart"
+    "Since it is the business intellegence request, retrieve Sales Data: Write python script to load data for `pants` from June, July, and August 2024 per store level",
+    "Calculate Total Sales: Calculate the total sales of pants for each store",
+    "Lastly, respond the forecasted result to user in natural language"
 ]
 
 User Question: can you forecast the sales of pant with Fabric denim for  month of feb 2024
 
 Output: 
 [
-    "Extract historical sales data for `pants` with fabric denim",
+    "Since it is the forecasting request, extract historical sales data for `pants` with fabric denim",
     "Model Inference: infere forecasting api for febuary 2024 with fetched pants data",
-    "Present the forecasted sales data in a clear and understandable format, such as a table or a chart"
+    "Lastly, respond the forecast result to user in natural language"
 ]
 
 
@@ -257,7 +262,7 @@ User Question: give me the forecasted sales for shirt in store 2 for next 2 mont
 Output:    
 [
     "Get the next 2 months: use python code to fetch the dates of next 2 months",
-    "Fetch the data: get historical data of `shirts` for store 2.",
+    "Since it is the forecasting request, fetch the historical data of `shirts` for store 2.",
     "Model Inference: infere forecasting api for the next 2 months with fetched shirts data",
 ]
 
@@ -267,9 +272,9 @@ User question:  can you tell me what will be the sales of pants in upcoming mont
 Output:  
 [   
     "Get the upcoming month: use python code to fetch the dates of upcoming month",
-    "fetch the historical sales data of `pants` and filter data for only north region",
+    "Since it seems to be the forecasting request, fetch the historical sales data of `pants` and filter data for only north region",
     "Model Inference: infere forecasting api for upcoming months with fetched pants data",
-    "Output the forecasted sales of `pants` for the upcoming month in the north region."
+    "Lastly, output the forecasted sales of `pants` for the upcoming month in the north region."
 ]
 
 
@@ -277,9 +282,9 @@ User question: Forecast the sales of shirts for the month of july 2024, break it
 
 Output:  
 [   
-    "Fetch the historical sales data for `shirts` for each and every store",
-    "Model Inference: infere forecasting api for upcoming months with fetched shirts data",
-    "Output the forecasted sales of `shirts`."
+    "Since it seems to be the forecasting request, fetch the historical sales data for `shirts` per store level",
+    "Model Inference: infere forecasting api for months of july 2024 with fetched shirts data",
+    "Lastly, output the forecasted sales of `shirts` in natural language."
 
 ]
 
@@ -287,23 +292,52 @@ User question: Stimulate the sales for the following product that I am planning 
 
 Output:  
 [   
-    "Call simulate sale forecasting API for new product with relevant args",
-    "Explain the results to user"
+    "Since it is the forecasting request for new product, call simulate sale forecasting API for new product with relevant args",
+    "Lastly, explain the results to user"
 
 ]
 
+User question: Forecast the sales of shirts for every store for the upcoming 2 months
+
+Output:  
+[   
+    "Since it is the forecasting request, fetch the historical sales data of shirts from API per store level",
+    "Model Inference: infere forecasting api for upcoming 2 months with fetched shirts data"
+    "Lastly, explain the results to user"
+]
+
+User question: Forecast the sales of shirts for july 2024 and break it down at store level. 
+
+Output:  
+[   
+    "Since it is the forecasting request, fetch the historical sales data of shirts from API per store level",
+    "Model Inference: infere forecasting api for july 2024 with fetched shirts data"
+    "Lastly, explain the results to user"
+]
+
+User question: What was the sales of shirts in north region and also forecast its sales for next quarter 
+
+Output:  
+[   
+    "This user question contains both BI query and Forecasting request. First, solve the BI request. For this fetch the sales of shirts in norht region and sum it up and respond to user"
+    "Secondly, address the forecasting request. For this first, get the date of next quarter/3 month: use python code to fetch the dates of next quarter/3 month",
+    "Thirdly, Model Inference: infere forecasting api for next 3 month/quarter with fetched shirts data"
+    "Lastly, explain the results to user"
+]
 
 
-**Response Format**
+## **Response Format**
 Always respond in python list with each element being a task
 
-**Recent Response**
+## **Recent Response**
 {{recent_response}}
 
-**Feedback**
+## **Feedback**
 {{ feedback }}
 
-User question: {{user_question}}
+## User question
+Past Conversations: {{past_conversation}}\nUse Past Conversation intelligently to extract task for next question. Question could be related to past conversation  
+Question: {{user_question}}
 """
 
 

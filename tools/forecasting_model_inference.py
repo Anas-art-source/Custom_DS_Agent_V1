@@ -35,14 +35,37 @@ def create_prediction_dataframe(start_date, end_date):
 # Comments: Old version
 def forecasting_model_inference_api(sales_dataframe,start_date, end_date):
     import pandas as pd
-    metrics = {}
     feature_map = {}
     pandas_dataframe = sales_dataframe.copy()
     df = pandas_dataframe.copy()
     categorical_features = list(df.drop(['date','sales'],axis=1).columns)
     if len(categorical_features) > 0:
         df = df.drop(categorical_features,axis=1)
+    prediction = {}
+    print(sales_dataframe.columns, "here in forecasting_model_inference_api")
+    if 'store' not in sales_dataframe.columns.tolist(): 
+        for y in ['sales', 'item_sold']:
+            df_prediction = sales_dataframe[['date', y]]
+            df_prediction.rename(columns={y: 'sales'}, inplace=True)
+            result = fit_predict(df_prediction, start_date=start_date, end_date=end_date)
+            prediction[y] = result
+    
+    else:
+        metric_store = {}
+        for store in sales_dataframe['store'].unique():
+            df_store = sales_dataframe[sales_dataframe['store'] == store]
+            if store not in metric_store:
+                for y in ['sales', 'item_sold']: 
+                    df_prediction = sales_dataframe[['date', y]]
+                    df_prediction.rename(columns={y: 'sales'}, inplace=True)
+                    result = fit_predict(df_prediction, start_date=start_date, end_date=end_date)
+                    prediction[f'{y}_{store}'] = result
+    print("Results Dictionary: ", prediction)
+    return prediction
+    
 
+def fit_predict(df, start_date, end_date):
+    metrics = {}
     df['Date'] = pd.to_datetime(df['date'])
     df.sort_values('Date', inplace=True)
     df['Year'] = df['Date'].dt.year
@@ -53,14 +76,14 @@ def forecasting_model_inference_api(sales_dataframe,start_date, end_date):
     numerical_transformer = StandardScaler()
 
     preprocessor = ColumnTransformer(
-            transformers=[
-                ('num', numerical_transformer, numerical_features),
-            ])
+                transformers=[
+                    ('num', numerical_transformer, numerical_features),
+                ])
     X = df[numerical_features]
 
     xgb_regressor = XGBRegressor()
     pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                               ('regressor', xgb_regressor)])
+                                ('regressor', xgb_regressor)])
 
     y = df['sales']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
@@ -70,10 +93,9 @@ def forecasting_model_inference_api(sales_dataframe,start_date, end_date):
 
     date_dataframe = create_prediction_dataframe(start_date=start_date, end_date=end_date)
     results, plot = agent_inference(pipeline,date_dataframe)
-    metrics['results'] = results
-    metrics['average_forcast'] = np.average(results)
     metrics['total_forecast'] = np.sum(results)
     return metrics
+
 
 def agent_inference(pipeline,date_dataframe):
     df = date_dataframe.copy()
@@ -95,3 +117,9 @@ def agent_inference(pipeline,date_dataframe):
     plt.show()
     plot = st.pyplot(plt,clear_figure=False)
     return predictions,plot
+
+
+# from pants_data_api import pants_data_api
+
+# data = pants_data_api(is_store_level=True)
+# print(forecasting_model_inference_api(data, start_date='2024-01-01', end_date='2024-01-31'))

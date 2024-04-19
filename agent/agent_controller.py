@@ -47,12 +47,14 @@ class AgentController(LLM):
         self.forecasting_model_inference_prompt = forecasting_model_inference_prompt
         self.error = False
         self.new_product_simulate_sf_prompt = new_product_simulate_sf_prompt
-
+        self.past_conversation = []
 
     def responder(self):
         prompt = Template(self.responder_prompt)
         x = prompt.render(context=self.history[-5:], question=self.init_user_question)
         response = self.step(x)
+        st.session_state['chat_history'].append({"role": "user", 'content': self.init_user_question})
+        st.session_state['chat_history'].append({'role': "ai", 'content': response})
         self.col1 = st.markdown(f":blue[{response}]")
 
 
@@ -85,7 +87,7 @@ class AgentController(LLM):
     def task_modifier(self):
         prompt = Template(self.task_modifier_prompt)
         x = prompt.render( history=self.history, current_task_with_id=self.tasks.get_current_task_with_id())
-        # self.print_color(x, "PURPLE")
+        self.print_color(x, "PURPLE")
         output_dict = None
         while output_dict == None:
             response = self.step(x)
@@ -122,7 +124,7 @@ class AgentController(LLM):
         self.task_printer(self.tasks.get_task_template())
         prompt = Template(self.action_delegator_prompt)
         x = prompt.render( history=self.history[-10:], data=self.data, current_task=self.tasks.get_current_task(), forecasting_model=self.forecasting_model_inference_prompt,new_product_simulate_sf_prompt=self.new_product_simulate_sf_prompt) 
-        self.print_color(x, "PURPLE")
+        # self.print_color(x, "PURPLE")
         response = response = self.step(x)
         action = self.actionParser(response)
         if isinstance(action, dict):
@@ -140,7 +142,7 @@ class AgentController(LLM):
                     'action': action,
                     'observation': observation
                 })
-                self.print_color("Observation: "  + observation['output'], 'GREEN')
+                # self.print_color("Observation: "  + observation['output'], 'GREEN')
                 self.success_print(observation['output'])
                 latest_successful_task = self.task_modifier()
                 if latest_successful_task['modify'] == 'successful':
@@ -153,6 +155,7 @@ class AgentController(LLM):
                     'observation': observation
                         })
                 else:
+                    # Adding the lastest error to history
                     self.history.pop()
                     self.history.append({
                     'action': response,
@@ -191,6 +194,7 @@ class AgentController(LLM):
 
 
     def planner(self,x):
+        print(x)
         response = self.step(x)
         tasks = self.taskParser(response)
         if isinstance(tasks, list):
@@ -199,13 +203,15 @@ class AgentController(LLM):
             return self.tasks.get_task_template()
         else:
             prompt = Template(self.planner_prompt)
-            self.planner_prompt = prompt.render(recent_response=response, feedback=tasks, user_question=self.init_user_question)
+            self.planner_prompt = prompt.render(recent_response=response, feedback=tasks, user_question=self.init_user_question, past_conversation=st.session_state['chat_history'])
 
 
     def initiate_chat(self, message, max_turn=25):
         self.init_user_question = message
+        self.history = []
+        print("Past conversation ", st.session_state['chat_history'])
         for i in range(max_turn):
-            time.sleep(1)
+            # time.sleep(1)
             if self.tasks and self.tasks.check_termination():
                 self.responder()
                 print("FINISHED")
@@ -213,7 +219,7 @@ class AgentController(LLM):
             if i == 0:
                 while self.task_not_parsed:
                     prompt = Template(self.planner_prompt)
-                    x = prompt.render(recent_response="No Response yet!", feedback='No feedback yet!',user_question=self.init_user_question)
+                    x = prompt.render(recent_response="No Response yet!", feedback='No feedback yet!',user_question=self.init_user_question, past_conversation=st.session_state['chat_history'])
                     tasks = self.planner(x)
                     self.print_color(tasks, 'YELLOW')
             else:
@@ -248,6 +254,9 @@ class AgentController(LLM):
 
     def streamlit_initiate_chat(self, max_turn=25):
         self.setup_streamlit()
+
+        if 'chat_history' not in st.session_state:
+            st.session_state['chat_history'] = []
         
         with self.col1:
             for response in st.session_state.responses:
